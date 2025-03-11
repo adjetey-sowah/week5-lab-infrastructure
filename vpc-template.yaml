@@ -237,8 +237,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5000
-          ToPort: 5000
+          FromPort: 8000
+          ToPort: 8000
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
