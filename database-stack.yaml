@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS PostgreSQL instance for EventFinder application'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the database will be deployed
+  
+  DatabaseSubnetGroupName:
+    Type: String
+    Description: Name of the database subnet group
+  
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t3.medium
+    Description: Database instance class
+  
+  DatabaseAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Allocated storage in GB
+  
+  DatabaseName:
+    Type: String
+    Default: eventfinder
+    Description: Name of the initial database
+  
+  EnvironmentName:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Environment name
+
+Resources:
+  # Security group for RDS
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EventFinder RDS PostgreSQL
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          Description: Allow PostgreSQL traffic from ECS security group
+          SourceSecurityGroupId: !ImportValue EventFinderECSSecurityGroupId  # Assuming this is exported from your ECS stack
+  
+  # RDS DB Instance
+  PostgreSQLDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      EngineVersion: 14.6
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: true
+      DBName: !Ref DatabaseName
+      # Reference credentials from Parameter Store using dynamic references
+      MasterUsername: '{{resolve:ssm-secure:/EventFinder/database/username:1}}'
+      MasterUserPassword: '{{resolve:ssm-secure:/EventFinder/database/password:1}}'
+      DBSubnetGroupName: !Ref DatabaseSubnetGroupName
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      EnableIAMDatabaseAuthentication: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PostgreSQL"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Application
+          Value: EventFinder
+  
+  # IAM role for enhanced monitoring
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Path: /service-role/
+
+Outputs:
+  PostgreSQLEndpoint:
+    Description: PostgreSQL endpoint address
+    Value: !GetAtt PostgreSQLDBInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-PostgreSQLEndpoint"
+  
+  PostgreSQLPort:
+    Description: PostgreSQL endpoint port
+    Value: !GetAtt PostgreSQLDBInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-PostgreSQLPort"
+  
+  PostgreSQLConnectionString:
+    Description: PostgreSQL connection string
+    Value: !Sub "jdbc:postgresql://${PostgreSQLDBInstance.Endpoint.Address}:${PostgreSQLDBInstance.Endpoint.Port}/${DatabaseName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-PostgreSQLConnectionString"
