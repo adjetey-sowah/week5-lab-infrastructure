@@ -1,6 +1,3 @@
 template-file-path: ecs-alb-template.yaml
-parameters:
-  VPCStackName: EventFinder-VPC
-  TaskDefinition: arn:aws:ecs:eu-central-1:831926601640:task-definition/eventfinder-definition:1
-  ContainerPort: '5000'
+parameters: {}
 tags: {}
