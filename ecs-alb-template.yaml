@@ -7,7 +7,7 @@ Parameters:
       Name of the VPC/infrastructure stack.
       (This must match the export names; here we assume "EventFinder-VPC")
     Type: String
-    Default: Week5-VPC-VPCID
+    Default: EventFinder-VPC
 
   TaskDefinition:
     Description: ARN of the existing ECS Task Definition
